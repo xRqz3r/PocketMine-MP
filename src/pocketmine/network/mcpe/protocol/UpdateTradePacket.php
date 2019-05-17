@@ -28,6 +28,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\network\mcpe\handler\SessionHandler;
+use pocketmine\network\mcpe\NetworkBinaryStream;
 use pocketmine\network\mcpe\protocol\types\WindowTypes;
 
 class UpdateTradePacket extends DataPacket implements ClientboundPacket{
@@ -56,30 +57,30 @@ class UpdateTradePacket extends DataPacket implements ClientboundPacket{
 	/** @var string */
 	public $offers;
 
-	protected function decodePayload() : void{
-		$this->windowId = $this->getByte();
-		$this->windowType = $this->getByte();
-		$this->thisIsAlwaysZero = $this->getVarInt();
-		$this->tradeTier = $this->getVarInt();
-		$this->traderEid = $this->getEntityUniqueId();
-		$this->playerEid = $this->getEntityUniqueId();
-		$this->displayName = $this->getString();
-		$this->isWilling = $this->getBool();
-		$this->isV2Trading = $this->getBool();
-		$this->offers = $this->getRemaining();
+	protected function decodePayload(NetworkBinaryStream $in) : void{
+		$this->windowId = $in->getByte();
+		$this->windowType = $in->getByte();
+		$this->thisIsAlwaysZero = $in->getVarInt();
+		$this->tradeTier = $in->getVarInt();
+		$this->traderEid = $in->getEntityUniqueId();
+		$this->playerEid = $in->getEntityUniqueId();
+		$this->displayName = $in->getString();
+		$this->isWilling = $in->getBool();
+		$this->isV2Trading = $in->getBool();
+		$this->offers = $in->getRemaining();
 	}
 
-	protected function encodePayload() : void{
-		$this->putByte($this->windowId);
-		$this->putByte($this->windowType);
-		$this->putVarInt($this->thisIsAlwaysZero);
-		$this->putVarInt($this->tradeTier);
-		$this->putEntityUniqueId($this->traderEid);
-		$this->putEntityUniqueId($this->playerEid);
-		$this->putString($this->displayName);
-		$this->putBool($this->isWilling);
-		$this->putBool($this->isV2Trading);
-		$this->put($this->offers);
+	protected function encodePayload(NetworkBinaryStream $out) : void{
+		$out->putByte($this->windowId);
+		$out->putByte($this->windowType);
+		$out->putVarInt($this->thisIsAlwaysZero);
+		$out->putVarInt($this->tradeTier);
+		$out->putEntityUniqueId($this->traderEid);
+		$out->putEntityUniqueId($this->playerEid);
+		$out->putString($this->displayName);
+		$out->putBool($this->isWilling);
+		$out->putBool($this->isV2Trading);
+		$out->put($this->offers);
 	}
 
 	public function handle(SessionHandler $handler) : bool{

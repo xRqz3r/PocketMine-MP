@@ -25,22 +25,9 @@ namespace pocketmine\network\mcpe\protocol;
 
 use pocketmine\network\BadPacketException;
 use pocketmine\network\mcpe\handler\SessionHandler;
+use pocketmine\network\mcpe\NetworkBinaryStream;
 
 interface Packet{
-
-	public function setOffset(int $offset) : void;
-
-	public function setBuffer(string $buffer = "", int $offset = 0);
-
-	public function getOffset() : int;
-
-	public function getBuffer() : string;
-
-	/**
-	 * Returns whether the offset has reached the end of the buffer.
-	 * @return bool
-	 */
-	public function feof() : bool;
 
 	public function pid() : int;
 
@@ -55,11 +42,13 @@ interface Packet{
 	public function mayHaveUnreadBytes() : bool;
 
 	/**
+	 * @param NetworkBinaryStream $in
+	 *
 	 * @throws BadPacketException
 	 */
-	public function decode() : void;
+	public function decode(NetworkBinaryStream $in) : void;
 
-	public function encode() : void;
+	public function encode(NetworkBinaryStream $out) : void;
 
 	/**
 	 * Performs handling for this packet. Usually you'll want an appropriately named method in the session handler for

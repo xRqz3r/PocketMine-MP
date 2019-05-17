@@ -35,7 +35,7 @@ use function is_object;
 use function is_string;
 use function method_exists;
 
-abstract class DataPacket extends NetworkBinaryStream implements Packet{
+abstract class DataPacket implements Packet{
 
 	public const NETWORK_ID = 0;
 
@@ -65,24 +65,28 @@ abstract class DataPacket extends NetworkBinaryStream implements Packet{
 	}
 
 	/**
+	 * @param NetworkBinaryStream $in
+	 *
 	 * @throws BadPacketException
 	 */
-	final public function decode() : void{
-		$this->rewind();
+	final public function decode(NetworkBinaryStream $in) : void{
+		$in->rewind();
 		try{
-			$this->decodeHeader();
-			$this->decodePayload();
+			$this->decodeHeader($in);
+			$this->decodePayload($in);
 		}catch(BinaryDataException | BadPacketException $e){
 			throw new BadPacketException($this->getName() . ": " . $e->getMessage(), 0, $e);
 		}
 	}
 
 	/**
+	 * @param NetworkBinaryStream $in
+	 *
 	 * @throws BinaryDataException
 	 * @throws \UnexpectedValueException
 	 */
-	protected function decodeHeader() : void{
-		$pid = $this->getUnsignedVarInt();
+	protected function decodeHeader(NetworkBinaryStream $in) : void{
+		$pid = $in->getUnsignedVarInt();
 		if($pid !== static::NETWORK_ID){
 			//TODO: this means a logical error in the code, but how to prevent it from happening?
 			throw new \UnexpectedValueException("Expected " . static::NETWORK_ID . " for packet ID, got $pid");
@@ -92,25 +96,29 @@ abstract class DataPacket extends NetworkBinaryStream implements Packet{
 	/**
 	 * Decodes the packet body, without the packet ID or other generic header fields.
 	 *
+	 * @param NetworkBinaryStream $in
+	 *
 	 * @throws BadPacketException
 	 * @throws BinaryDataException
 	 */
-	abstract protected function decodePayload() : void;
+	abstract protected function decodePayload(NetworkBinaryStream $in) : void;
 
-	final public function encode() : void{
-		$this->reset();
-		$this->encodeHeader();
-		$this->encodePayload();
+	final public function encode(NetworkBinaryStream $out) : void{
+		$out->reset();
+		$this->encodeHeader($out);
+		$this->encodePayload($out);
 	}
 
-	protected function encodeHeader() : void{
-		$this->putUnsignedVarInt(static::NETWORK_ID);
+	protected function encodeHeader(NetworkBinaryStream $out) : void{
+		$out->putUnsignedVarInt(static::NETWORK_ID);
 	}
 
 	/**
 	 * Encodes the packet body, without the packet ID or other generic header fields.
+	 *
+	 * @param NetworkBinaryStream $out
 	 */
-	abstract protected function encodePayload() : void;
+	abstract protected function encodePayload(NetworkBinaryStream $out) : void;
 
 	public function __debugInfo(){
 		$data = [];

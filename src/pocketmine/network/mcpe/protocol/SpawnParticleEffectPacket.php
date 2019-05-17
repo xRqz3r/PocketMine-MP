@@ -27,6 +27,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\handler\SessionHandler;
+use pocketmine\network\mcpe\NetworkBinaryStream;
 use pocketmine\network\mcpe\protocol\types\DimensionIds;
 
 class SpawnParticleEffectPacket extends DataPacket implements ClientboundPacket{
@@ -41,18 +42,18 @@ class SpawnParticleEffectPacket extends DataPacket implements ClientboundPacket{
 	/** @var string */
 	public $particleName;
 
-	protected function decodePayload() : void{
-		$this->dimensionId = $this->getByte();
-		$this->entityUniqueId = $this->getEntityUniqueId();
-		$this->position = $this->getVector3();
-		$this->particleName = $this->getString();
+	protected function decodePayload(NetworkBinaryStream $in) : void{
+		$this->dimensionId = $in->getByte();
+		$this->entityUniqueId = $in->getEntityUniqueId();
+		$this->position = $in->getVector3();
+		$this->particleName = $in->getString();
 	}
 
-	protected function encodePayload() : void{
-		$this->putByte($this->dimensionId);
-		$this->putEntityUniqueId($this->entityUniqueId);
-		$this->putVector3($this->position);
-		$this->putString($this->particleName);
+	protected function encodePayload(NetworkBinaryStream $out) : void{
+		$out->putByte($this->dimensionId);
+		$out->putEntityUniqueId($this->entityUniqueId);
+		$out->putVector3($this->position);
+		$out->putString($this->particleName);
 	}
 
 	public function handle(SessionHandler $handler) : bool{

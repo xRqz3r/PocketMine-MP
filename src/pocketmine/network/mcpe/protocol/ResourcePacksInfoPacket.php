@@ -27,6 +27,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\network\mcpe\handler\SessionHandler;
+use pocketmine\network\mcpe\NetworkBinaryStream;
 use pocketmine\resourcepacks\ResourcePack;
 use function count;
 
@@ -42,54 +43,54 @@ class ResourcePacksInfoPacket extends DataPacket implements ClientboundPacket{
 	/** @var ResourcePack[] */
 	public $resourcePackEntries = [];
 
-	protected function decodePayload() : void{
-		$this->mustAccept = $this->getBool();
-		$this->hasScripts = $this->getBool();
-		$behaviorPackCount = $this->getLShort();
+	protected function decodePayload(NetworkBinaryStream $in) : void{
+		$this->mustAccept = $in->getBool();
+		$this->hasScripts = $in->getBool();
+		$behaviorPackCount = $in->getLShort();
 		while($behaviorPackCount-- > 0){
-			$this->getString();
-			$this->getString();
-			$this->getLLong();
-			$this->getString();
-			$this->getString();
-			$this->getString();
-			$this->getBool();
+			$in->getString();
+			$in->getString();
+			$in->getLLong();
+			$in->getString();
+			$in->getString();
+			$in->getString();
+			$in->getBool();
 		}
 
-		$resourcePackCount = $this->getLShort();
+		$resourcePackCount = $in->getLShort();
 		while($resourcePackCount-- > 0){
-			$this->getString();
-			$this->getString();
-			$this->getLLong();
-			$this->getString();
-			$this->getString();
-			$this->getString();
-			$this->getBool();
+			$in->getString();
+			$in->getString();
+			$in->getLLong();
+			$in->getString();
+			$in->getString();
+			$in->getString();
+			$in->getBool();
 		}
 	}
 
-	protected function encodePayload() : void{
-		$this->putBool($this->mustAccept);
-		$this->putBool($this->hasScripts);
-		$this->putLShort(count($this->behaviorPackEntries));
+	protected function encodePayload(NetworkBinaryStream $out) : void{
+		$out->putBool($this->mustAccept);
+		$out->putBool($this->hasScripts);
+		$out->putLShort(count($this->behaviorPackEntries));
 		foreach($this->behaviorPackEntries as $entry){
-			$this->putString($entry->getPackId());
-			$this->putString($entry->getPackVersion());
-			$this->putLLong($entry->getPackSize());
-			$this->putString(""); //TODO: encryption key
-			$this->putString(""); //TODO: subpack name
-			$this->putString(""); //TODO: content identity
-			$this->putBool(false); //TODO: has scripts (?)
+			$out->putString($entry->getPackId());
+			$out->putString($entry->getPackVersion());
+			$out->putLLong($entry->getPackSize());
+			$out->putString(""); //TODO: encryption key
+			$out->putString(""); //TODO: subpack name
+			$out->putString(""); //TODO: content identity
+			$out->putBool(false); //TODO: has scripts (?)
 		}
-		$this->putLShort(count($this->resourcePackEntries));
+		$out->putLShort(count($this->resourcePackEntries));
 		foreach($this->resourcePackEntries as $entry){
-			$this->putString($entry->getPackId());
-			$this->putString($entry->getPackVersion());
-			$this->putLLong($entry->getPackSize());
-			$this->putString(""); //TODO: encryption key
-			$this->putString(""); //TODO: subpack name
-			$this->putString(""); //TODO: content identity
-			$this->putBool(false); //TODO: seems useless for resource packs
+			$out->putString($entry->getPackId());
+			$out->putString($entry->getPackVersion());
+			$out->putLLong($entry->getPackSize());
+			$out->putString(""); //TODO: encryption key
+			$out->putString(""); //TODO: subpack name
+			$out->putString(""); //TODO: content identity
+			$out->putBool(false); //TODO: seems useless for resource packs
 		}
 	}
 

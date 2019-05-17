@@ -265,7 +265,7 @@ class NetworkSession{
 
 		Timings::$playerNetworkReceiveDecompressTimer->startTiming();
 		try{
-			$stream = new PacketBatch(NetworkCompression::decompress($payload));
+			$batch = new PacketBatch(NetworkCompression::decompress($payload));
 		}catch(\ErrorException $e){
 			$this->logger->debug("Failed to decompress packet: " . bin2hex($payload));
 			//TODO: this isn't incompatible game version if we already established protocol version
@@ -275,32 +275,34 @@ class NetworkSession{
 		}
 
 		$count = 0;
-		while(!$stream->feof() and $this->connected){
+		while(!$batch->feof() and $this->connected){
 			if($count++ >= 500){
 				throw new BadPacketException("Too many packets in a single batch");
 			}
+			$stream = new NetworkBinaryStream();
 			try{
-				$pk = $stream->getPacket();
+				$pk = $batch->getPacket($stream);
 			}catch(BinaryDataException $e){
-				$this->logger->debug("Packet batch: " . bin2hex($stream->getBuffer()));
+				$this->logger->debug("Packet batch: " . bin2hex($batch->getBuffer()));
 				throw new BadPacketException("Packet batch decode error: " . $e->getMessage(), 0, $e);
 			}
 
 			try{
-				$this->handleDataPacket($pk);
+				$this->handleDataPacket($stream, $pk);
 			}catch(BadPacketException $e){
-				$this->logger->debug($pk->getName() . ": " . bin2hex($pk->getBuffer()));
+				$this->logger->debug($pk->getName() . ": " . bin2hex($stream->getBuffer()));
 				throw new BadPacketException("Error processing " . $pk->getName() . ": " . $e->getMessage(), 0, $e);
 			}
 		}
 	}
 
 	/**
-	 * @param Packet $packet
+	 * @param NetworkBinaryStream $stream
+	 * @param Packet              $packet
 	 *
 	 * @throws BadPacketException
 	 */
-	public function handleDataPacket(Packet $packet) : void{
+	public function handleDataPacket(NetworkBinaryStream $stream, Packet $packet) : void{
 		if(!($packet instanceof ServerboundPacket)){
 			throw new BadPacketException("Unexpected non-serverbound packet");
 		}
@@ -309,16 +311,16 @@ class NetworkSession{
 		$timings->startTiming();
 
 		try{
-			$packet->decode();
-			if(!$packet->feof() and !$packet->mayHaveUnreadBytes()){
-				$remains = substr($packet->getBuffer(), $packet->getOffset());
+			$packet->decode($stream);
+			if(!$stream->feof() and !$packet->mayHaveUnreadBytes()){
+				$remains = substr($stream->getBuffer(), $stream->getOffset());
 				$this->logger->debug("Still " . strlen($remains) . " bytes unread in " . $packet->getName() . ": " . bin2hex($remains));
 			}
 
 			$ev = new DataPacketReceiveEvent($this, $packet);
 			$ev->call();
 			if(!$ev->isCancelled() and !$packet->handle($this->handler)){
-				$this->logger->debug("Unhandled " . $packet->getName() . ": " . bin2hex($packet->getBuffer()));
+				$this->logger->debug("Unhandled " . $packet->getName() . ": " . bin2hex($stream->getBuffer()));
 			}
 		}finally{
 			$timings->stopTiming();

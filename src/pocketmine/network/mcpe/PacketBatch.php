@@ -30,16 +30,21 @@ use pocketmine\utils\BinaryDataException;
 class PacketBatch extends NetworkBinaryStream{
 
 	public function putPacket(Packet $packet) : void{
-		$packet->encode();
-		$this->putString($packet->getBuffer());
+		//TODO: reuse buffers
+		$out = new NetworkBinaryStream();
+		$packet->encode($out);
+		$this->putString($out->getBuffer());
 	}
 
 	/**
+	 * @param NetworkBinaryStream $in
+	 *
 	 * @return Packet
 	 * @throws BinaryDataException
 	 */
-	public function getPacket() : Packet{
-		return PacketPool::getPacket($this->getString());
+	public function getPacket(NetworkBinaryStream $in) : Packet{
+		$in->setBuffer($this->getString());
+		return PacketPool::getPacketById($in->getUnsignedVarInt());
 	}
 
 	/**

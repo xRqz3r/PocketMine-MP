@@ -23,9 +23,6 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
 
-use pocketmine\utils\Binary;
-use pocketmine\utils\BinaryDataException;
-
 class PacketPool{
 	/** @var \SplFixedArray<Packet> */
 	protected static $pool = null;
@@ -174,19 +171,5 @@ class PacketPool{
 	 */
 	public static function getPacketById(int $pid) : Packet{
 		return isset(static::$pool[$pid]) ? clone static::$pool[$pid] : new UnknownPacket();
-	}
-
-	/**
-	 * @param string $buffer
-	 *
-	 * @return Packet
-	 * @throws BinaryDataException
-	 */
-	public static function getPacket(string $buffer) : Packet{
-		$offset = 0;
-		$pk = static::getPacketById(Binary::readUnsignedVarInt($buffer, $offset));
-		$pk->setBuffer($buffer, $offset);
-
-		return $pk;
 	}
 }
