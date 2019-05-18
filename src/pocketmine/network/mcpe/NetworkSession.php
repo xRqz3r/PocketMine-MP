@@ -282,7 +282,7 @@ class NetworkSession{
 			$stream = new NetworkBinaryStream();
 			try{
 				$pk = $batch->getPacket($stream);
-			}catch(BinaryDataException $e){
+			}catch(BadPacketException | BinaryDataException $e){
 				$this->logger->debug("Packet batch: " . bin2hex($batch->getBuffer()));
 				throw new BadPacketException("Packet batch decode error: " . $e->getMessage(), 0, $e);
 			}

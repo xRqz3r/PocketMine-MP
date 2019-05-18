@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
 
+use pocketmine\network\BadPacketException;
+
 class PacketPool{
 	/** @var \SplFixedArray<Packet> */
 	protected static $pool = null;
@@ -168,8 +170,12 @@ class PacketPool{
 	 * @param int $pid
 	 *
 	 * @return Packet
+	 * @throws BadPacketException
 	 */
 	public static function getPacketById(int $pid) : Packet{
-		return isset(static::$pool[$pid]) ? clone static::$pool[$pid] : new UnknownPacket();
+		if(isset(static::$pool[$pid])){
+			return clone static::$pool[$pid];
+		}
+		throw new BadPacketException("Unknown packet ID $pid");
 	}
 }

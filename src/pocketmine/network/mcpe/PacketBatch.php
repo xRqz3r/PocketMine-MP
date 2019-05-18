@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
 
+use pocketmine\network\BadPacketException;
 use pocketmine\network\mcpe\protocol\Packet;
 use pocketmine\network\mcpe\protocol\PacketPool;
 use pocketmine\utils\BinaryDataException;
@@ -40,6 +41,7 @@ class PacketBatch extends NetworkBinaryStream{
 	 * @param NetworkBinaryStream $in
 	 *
 	 * @return Packet
+	 * @throws BadPacketException
 	 * @throws BinaryDataException
 	 */
 	public function getPacket(NetworkBinaryStream $in) : Packet{
