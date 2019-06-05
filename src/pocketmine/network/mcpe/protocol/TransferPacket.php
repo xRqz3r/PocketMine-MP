@@ -36,6 +36,13 @@ class TransferPacket extends DataPacket implements ClientboundPacket{
 	/** @var int */
 	public $port = 19132;
 
+	public static function create(string $address, int $port) : self{
+		$result = new self;
+		$result->address = $address;
+		$result->port = $port;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->address = $in->getString();
 		$this->port = $in->getLShort();

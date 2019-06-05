@@ -35,21 +35,42 @@ class MobArmorEquipmentPacket extends DataPacket implements ClientboundPacket, S
 
 	/** @var int */
 	public $entityRuntimeId;
-	/** @var Item[] */
-	public $slots = [];
+
+	//this intentionally doesn't use an array because we don't want any implicit dependencies on internal order
+
+	/** @var Item */
+	public $head;
+	/** @var Item */
+	public $chest;
+	/** @var Item */
+	public $legs;
+	/** @var Item */
+	public $feet;
+
+	public static function create(int $entityRuntimeId, Item $head, Item $chest, Item $legs, Item $feet) : self{
+		$result = new self;
+		$result->entityRuntimeId = $entityRuntimeId;
+		$result->head = $head;
+		$result->chest = $chest;
+		$result->legs = $legs;
+		$result->feet = $feet;
+		return $result;
+	}
 
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->entityRuntimeId = $in->getEntityRuntimeId();
-		for($i = 0; $i < 4; ++$i){
-			$this->slots[$i] = $in->getSlot();
-		}
+		$this->head = $in->getSlot();
+		$this->chest = $in->getSlot();
+		$this->legs = $in->getSlot();
+		$this->feet = $in->getSlot();
 	}
 
 	protected function encodePayload(NetworkBinaryStream $out) : void{
 		$out->putEntityRuntimeId($this->entityRuntimeId);
-		for($i = 0; $i < 4; ++$i){
-			$out->putSlot($this->slots[$i]);
-		}
+		$out->putSlot($this->head);
+		$out->putSlot($this->chest);
+		$out->putSlot($this->legs);
+		$out->putSlot($this->feet);
 	}
 
 	public function handle(SessionHandler $handler) : bool{

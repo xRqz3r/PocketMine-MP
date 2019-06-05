@@ -34,7 +34,6 @@ use pocketmine\command\ConsoleCommandSender;
 use pocketmine\command\PluginIdentifiableCommand;
 use pocketmine\command\SimpleCommandMap;
 use pocketmine\entity\EntityFactory;
-use pocketmine\entity\Skin;
 use pocketmine\event\HandlerList;
 use pocketmine\event\player\PlayerDataSaveEvent;
 use pocketmine\event\server\CommandEvent;
@@ -61,9 +60,7 @@ use pocketmine\network\mcpe\NetworkCompression;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\PacketBatch;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
-use pocketmine\network\mcpe\protocol\PlayerListPacket;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
-use pocketmine\network\mcpe\protocol\types\PlayerListEntry;
 use pocketmine\network\mcpe\RakLibInterface;
 use pocketmine\network\Network;
 use pocketmine\network\query\QueryHandler;
@@ -82,7 +79,6 @@ use pocketmine\scheduler\AsyncPool;
 use pocketmine\scheduler\SendUsageTask;
 use pocketmine\snooze\SleeperHandler;
 use pocketmine\snooze\SleeperNotifier;
-use pocketmine\tile\TileFactory;
 use pocketmine\timings\Timings;
 use pocketmine\timings\TimingsHandler;
 use pocketmine\updater\AutoUpdater;
@@ -1187,7 +1183,6 @@ class Server{
 			$this->commandMap = new SimpleCommandMap($this);
 
 			EntityFactory::init();
-			TileFactory::init();
 			BlockFactory::init();
 			Enchantment::init();
 			ItemFactory::init();
@@ -1554,7 +1549,7 @@ class Server{
 			}
 		}
 
-		if($type === PluginLoadOrder::POSTWORLD()){
+		if($type->equals(PluginLoadOrder::POSTWORLD())){
 			$this->commandMap->registerServerAliases();
 			DefaultPermissions::registerCorePermissions();
 		}
@@ -1815,8 +1810,9 @@ class Server{
 	}
 
 	public function addOnlinePlayer(Player $player) : void{
-		$this->updatePlayerListData($player->getUniqueId(), $player->getId(), $player->getDisplayName(), $player->getSkin(), $player->getXuid());
-
+		foreach($this->playerList as $p){
+			$p->getNetworkSession()->onPlayerAdded($player);
+		}
 		$this->playerList[$player->getRawUniqueId()] = $player;
 
 		if($this->sendUsageTicker > 0){
@@ -1827,50 +1823,10 @@ class Server{
 	public function removeOnlinePlayer(Player $player) : void{
 		if(isset($this->playerList[$player->getRawUniqueId()])){
 			unset($this->playerList[$player->getRawUniqueId()]);
-
-			$this->removePlayerListData($player->getUniqueId());
+			foreach($this->playerList as $p){
+				$p->getNetworkSession()->onPlayerRemoved($player);
+			}
 		}
-	}
-
-	/**
-	 * @param UUID          $uuid
-	 * @param int           $entityId
-	 * @param string        $name
-	 * @param Skin          $skin
-	 * @param string        $xboxUserId
-	 * @param Player[]|null $players
-	 */
-	public function updatePlayerListData(UUID $uuid, int $entityId, string $name, Skin $skin, string $xboxUserId = "", ?array $players = null) : void{
-		$pk = new PlayerListPacket();
-		$pk->type = PlayerListPacket::TYPE_ADD;
-
-		$pk->entries[] = PlayerListEntry::createAdditionEntry($uuid, $entityId, $name, $skin, $xboxUserId);
-
-		$this->broadcastPacket($players ?? $this->playerList, $pk);
-	}
-
-	/**
-	 * @param UUID          $uuid
-	 * @param Player[]|null $players
-	 */
-	public function removePlayerListData(UUID $uuid, ?array $players = null) : void{
-		$pk = new PlayerListPacket();
-		$pk->type = PlayerListPacket::TYPE_REMOVE;
-		$pk->entries[] = PlayerListEntry::createRemovalEntry($uuid);
-		$this->broadcastPacket($players ?? $this->playerList, $pk);
-	}
-
-	/**
-	 * @param Player $p
-	 */
-	public function sendFullPlayerListData(Player $p) : void{
-		$pk = new PlayerListPacket();
-		$pk->type = PlayerListPacket::TYPE_ADD;
-		foreach($this->playerList as $player){
-			$pk->entries[] = PlayerListEntry::createAdditionEntry($player->getUniqueId(), $player->getId(), $player->getDisplayName(), $player->getSkin(), $player->getXuid());
-		}
-
-		$p->sendDataPacket($pk);
 	}
 
 	public function sendUsage(int $type = SendUsageTask::TYPE_STATUS) : void{

@@ -35,6 +35,12 @@ class RemoveEntityPacket extends DataPacket implements ClientboundPacket{
 	/** @var int */
 	public $entityUniqueId;
 
+	public static function create(int $entityUniqueId) : self{
+		$result = new self;
+		$result->entityUniqueId = $entityUniqueId;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->entityUniqueId = $in->getEntityUniqueId();
 	}

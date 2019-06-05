@@ -39,6 +39,14 @@ class FullChunkDataPacket extends DataPacket implements ClientboundPacket{
 	/** @var string */
 	public $data;
 
+	public static function create(int $chunkX, int $chunkZ, string $payload) : self{
+		$result = new self;
+		$result->chunkX = $chunkX;
+		$result->chunkZ = $chunkZ;
+		$result->data = $payload;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->chunkX = $in->getVarInt();
 		$this->chunkZ = $in->getVarInt();

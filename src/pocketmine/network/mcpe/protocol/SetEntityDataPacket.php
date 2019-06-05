@@ -37,6 +37,13 @@ class SetEntityDataPacket extends DataPacket implements ClientboundPacket, Serve
 	/** @var array */
 	public $metadata;
 
+	public static function create(int $entityRuntimeId, array $metadata) : self{
+		$result = new self;
+		$result->entityRuntimeId = $entityRuntimeId;
+		$result->metadata = $metadata;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->entityRuntimeId = $in->getEntityRuntimeId();
 		$this->metadata = $in->getEntityMetadata();

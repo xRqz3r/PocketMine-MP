@@ -23,13 +23,13 @@ declare(strict_types=1);
 
 namespace pocketmine\inventory;
 
-use pocketmine\world\sound\ChestCloseSound;
-use pocketmine\world\sound\ChestOpenSound;
-use pocketmine\world\sound\Sound;
+use pocketmine\block\tile\Chest;
 use pocketmine\network\mcpe\protocol\BlockEventPacket;
 use pocketmine\network\mcpe\protocol\types\WindowTypes;
 use pocketmine\Player;
-use pocketmine\tile\Chest;
+use pocketmine\world\sound\ChestCloseSound;
+use pocketmine\world\sound\ChestOpenSound;
+use pocketmine\world\sound\Sound;
 use function count;
 
 class ChestInventory extends ContainerInventory{
@@ -86,12 +86,7 @@ class ChestInventory extends ContainerInventory{
 	protected function broadcastBlockEventPacket(bool $isOpen) : void{
 		$holder = $this->getHolder();
 
-		$pk = new BlockEventPacket();
-		$pk->x = (int) $holder->x;
-		$pk->y = (int) $holder->y;
-		$pk->z = (int) $holder->z;
-		$pk->eventType = 1; //it's always 1 for a chest
-		$pk->eventData = $isOpen ? 1 : 0;
-		$holder->getWorld()->broadcastPacketToViewers($holder, $pk);
+		//event ID is always 1 for a chest
+		$holder->getWorld()->broadcastPacketToViewers($holder, BlockEventPacket::create(1, $isOpen ? 1 : 0, $holder->asVector3()));
 	}
 }

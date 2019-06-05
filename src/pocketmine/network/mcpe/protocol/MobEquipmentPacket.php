@@ -44,6 +44,16 @@ class MobEquipmentPacket extends DataPacket implements ClientboundPacket, Server
 	/** @var int */
 	public $windowId = 0;
 
+	public static function create(int $entityRuntimeId, Item $item, int $inventorySlot, int $windowId) : self{
+		$result = new self;
+		$result->entityRuntimeId = $entityRuntimeId;
+		$result->item = $item;
+		$result->inventorySlot = $inventorySlot;
+		$result->hotbarSlot = $inventorySlot;
+		$result->windowId = $windowId;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->entityRuntimeId = $in->getEntityRuntimeId();
 		$this->item = $in->getSlot();

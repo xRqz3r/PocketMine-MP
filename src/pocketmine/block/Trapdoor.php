@@ -31,7 +31,7 @@ use pocketmine\math\Vector3;
 use pocketmine\Player;
 use pocketmine\world\sound\DoorSound;
 
-abstract class Trapdoor extends Transparent{
+class Trapdoor extends Transparent{
 
 	/** @var int */
 	protected $facing = Facing::NORTH;
@@ -47,7 +47,7 @@ abstract class Trapdoor extends Transparent{
 	public function readStateFromData(int $id, int $stateMeta) : void{
 		//TODO: in PC the values are reversed (facing - 2)
 
-		$this->facing = BlockDataValidator::readHorizontalFacing(5 - ($stateMeta & 0x03));
+		$this->facing = BlockDataValidator::read5MinusHorizontalFacing($stateMeta);
 		$this->top = ($stateMeta & BlockLegacyMetadata::TRAPDOOR_FLAG_UPPER) !== 0;
 		$this->open = ($stateMeta & BlockLegacyMetadata::TRAPDOOR_FLAG_OPEN) !== 0;
 	}

@@ -27,6 +27,7 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use pocketmine\entity\Skin;
+use pocketmine\network\BadPacketException;
 use pocketmine\network\mcpe\handler\SessionHandler;
 use pocketmine\network\mcpe\NetworkBinaryStream;
 use pocketmine\network\mcpe\protocol\types\PlayerListEntry;
@@ -42,6 +43,22 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
 	public $entries = [];
 	/** @var int */
 	public $type;
+
+	public static function add(array $entries) : self{
+		(function(PlayerListEntry ...$_){})($entries);
+		$result = new self;
+		$result->type = self::TYPE_ADD;
+		$result->entries = $entries;
+		return $result;
+	}
+
+	public static function remove(array $entries) : self{
+		(function(PlayerListEntry ...$_){})($entries);
+		$result = new self;
+		$result->type = self::TYPE_REMOVE;
+		$result->entries = $entries;
+		return $result;
+	}
 
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->type = $in->getByte();
@@ -60,13 +77,17 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
 				$geometryName = $in->getString();
 				$geometryData = $in->getString();
 
-				$entry->skin = new Skin(
-					$skinId,
-					$skinData,
-					$capeData,
-					$geometryName,
-					$geometryData
-				);
+				try{
+					$entry->skin = new Skin(
+						$skinId,
+						$skinData,
+						$capeData,
+						$geometryName,
+						$geometryData
+					);
+				}catch(\InvalidArgumentException $e){
+					throw new BadPacketException($e->getMessage(), 0, $e);
+				}
 				$entry->xboxUserId = $in->getString();
 				$entry->platformChatId = $in->getString();
 			}else{

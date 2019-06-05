@@ -36,12 +36,6 @@ interface Packet{
 	public function canBeSentBeforeLogin() : bool;
 
 	/**
-	 * Returns whether the packet may legally have unread bytes left in the buffer.
-	 * @return bool
-	 */
-	public function mayHaveUnreadBytes() : bool;
-
-	/**
 	 * @param NetworkBinaryStream $in
 	 *
 	 * @throws BadPacketException

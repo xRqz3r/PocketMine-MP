@@ -26,6 +26,7 @@ namespace pocketmine\network\mcpe\protocol;
 #include <rules/DataPacket.h>
 
 
+use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\handler\SessionHandler;
 use pocketmine\network\mcpe\NetworkBinaryStream;
 
@@ -42,6 +43,16 @@ class BlockEventPacket extends DataPacket implements ClientboundPacket{
 	public $eventType;
 	/** @var int */
 	public $eventData;
+
+	public static function create(int $eventId, int $eventData, Vector3 $pos) : self{
+		$pk = new self;
+		$pk->eventType = $eventId;
+		$pk->eventData = $eventData;
+		$pk->x = $pos->getFloorX();
+		$pk->y = $pos->getFloorY();
+		$pk->z = $pos->getFloorZ();
+		return $pk;
+	}
 
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$in->getBlockPosition($this->x, $this->y, $this->z);

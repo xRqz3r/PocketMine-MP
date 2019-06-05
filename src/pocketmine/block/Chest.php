@@ -23,13 +23,13 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\block\tile\Chest as TileChest;
 use pocketmine\block\utils\BlockDataValidator;
 use pocketmine\item\Item;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
-use pocketmine\tile\Chest as TileChest;
 
 class Chest extends Transparent{
 
@@ -62,29 +62,27 @@ class Chest extends Transparent{
 			$this->facing = Facing::opposite($player->getHorizontalFacing());
 		}
 
-		if(parent::place($item, $blockReplace, $blockClicked, $face, $clickVector, $player)){
-			$tile = $this->world->getTile($this);
-			if($tile instanceof TileChest){
-				foreach([
-					Facing::rotateY($this->facing, true),
-					Facing::rotateY($this->facing, false)
-				] as $side){
-					$c = $this->getSide($side);
-					if($c instanceof Chest and $c->isSameType($this) and $c->facing === $this->facing){
-						$pair = $this->world->getTile($c);
-						if($pair instanceof TileChest and !$pair->isPaired()){
-							$pair->pairWith($tile);
-							$tile->pairWith($pair);
-							break;
-						}
+		return parent::place($item, $blockReplace, $blockClicked, $face, $clickVector, $player);
+	}
+
+	public function onPostPlace() : void{
+		$tile = $this->world->getTile($this);
+		if($tile instanceof TileChest){
+			foreach([
+				Facing::rotateY($this->facing, true),
+				Facing::rotateY($this->facing, false)
+			] as $side){
+				$c = $this->getSide($side);
+				if($c instanceof Chest and $c->isSameType($this) and $c->facing === $this->facing){
+					$pair = $this->world->getTile($c);
+					if($pair instanceof TileChest and !$pair->isPaired()){
+						$pair->pairWith($tile);
+						$tile->pairWith($pair);
+						break;
 					}
 				}
 			}
-
-			return true;
 		}
-
-		return false;
 	}
 
 	public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null) : bool{

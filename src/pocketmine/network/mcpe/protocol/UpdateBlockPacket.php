@@ -52,6 +52,14 @@ class UpdateBlockPacket extends DataPacket implements ClientboundPacket{
 	/** @var int */
 	public $dataLayerId = self::DATA_LAYER_NORMAL;
 
+	public static function create(int $x, int $y, int $z, int $blockRuntimeId, int $dataLayerId = self::DATA_LAYER_NORMAL) : self{
+		$result = new self;
+		[$result->x, $result->y, $result->z] = [$x, $y, $z];
+		$result->blockRuntimeId = $blockRuntimeId;
+		$result->dataLayerId = $dataLayerId;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$in->getBlockPosition($this->x, $this->y, $this->z);
 		$this->blockRuntimeId = $in->getUnsignedVarInt();

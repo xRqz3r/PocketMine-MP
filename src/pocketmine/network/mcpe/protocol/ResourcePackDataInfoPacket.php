@@ -44,6 +44,16 @@ class ResourcePackDataInfoPacket extends DataPacket implements ClientboundPacket
 	/** @var string */
 	public $sha256;
 
+	public static function create(string $packId, int $maxChunkSize, int $chunkCount, int $compressedPackSize, string $sha256sum) : self{
+		$result = new self;
+		$result->packId = $packId;
+		$result->maxChunkSize = $maxChunkSize;
+		$result->chunkCount = $chunkCount;
+		$result->compressedPackSize = $compressedPackSize;
+		$result->sha256 = $sha256sum;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->packId = $in->getString();
 		$this->maxChunkSize = $in->getLInt();

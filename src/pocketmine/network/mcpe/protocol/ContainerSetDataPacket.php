@@ -35,7 +35,7 @@ class ContainerSetDataPacket extends DataPacket implements ClientboundPacket{
 	public const PROPERTY_FURNACE_TICK_COUNT = 0;
 	public const PROPERTY_FURNACE_LIT_TIME = 1;
 	public const PROPERTY_FURNACE_LIT_DURATION = 2;
-	//TODO: check property 3
+	public const PROPERTY_FURNACE_STORED_XP = 3;
 	public const PROPERTY_FURNACE_FUEL_AUX = 4;
 
 	public const PROPERTY_BREWING_STAND_BREW_TIME = 0;
@@ -48,6 +48,14 @@ class ContainerSetDataPacket extends DataPacket implements ClientboundPacket{
 	public $property;
 	/** @var int */
 	public $value;
+
+	public static function create(int $windowId, int $propertyId, int $value) : self{
+		$result = new self;
+		$result->property = $propertyId;
+		$result->value = $value;
+		$result->windowId = $windowId;
+		return $result;
+	}
 
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->windowId = $in->getByte();

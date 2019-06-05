@@ -27,6 +27,7 @@ use function implode;
 use function in_array;
 use function json_decode;
 use function json_encode;
+use function json_last_error_msg;
 use function strlen;
 
 class Skin{
@@ -48,41 +49,38 @@ class Skin{
 	private $geometryData;
 
 	public function __construct(string $skinId, string $skinData, string $capeData = "", string $geometryName = "", string $geometryData = ""){
+		if($skinId === ""){
+			throw new \InvalidArgumentException("Skin ID must not be empty");
+		}
+		$len = strlen($skinData);
+		if(!in_array($len, self::ACCEPTED_SKIN_SIZES, true)){
+			throw new \InvalidArgumentException("Invalid skin data size $len bytes (allowed sizes: " . implode(", ", self::ACCEPTED_SKIN_SIZES) . ")");
+		}
+		if($capeData !== "" and strlen($capeData) !== 8192){
+			throw new \InvalidArgumentException("Invalid cape data size " . strlen($capeData) . " bytes (must be exactly 8192 bytes)");
+		}
+
+		if($geometryData !== ""){
+			$decodedGeometry = json_decode($geometryData);
+			if($decodedGeometry === false){
+				throw new \InvalidArgumentException("Invalid geometry data (" . json_last_error_msg() . ")");
+			}
+
+			/*
+			 * Hack to cut down on network overhead due to skins, by un-pretty-printing geometry JSON.
+			 *
+			 * Mojang, some stupid reason, send every single model for every single skin in the selected skin-pack.
+			 * Not only that, they are pretty-printed.
+			 * TODO: find out what model crap can be safely dropped from the packet (unless it gets fixed first)
+			 */
+			$geometryData = json_encode($decodedGeometry);
+		}
+
 		$this->skinId = $skinId;
 		$this->skinData = $skinData;
 		$this->capeData = $capeData;
 		$this->geometryName = $geometryName;
 		$this->geometryData = $geometryData;
-	}
-
-	/**
-	 * @deprecated
-	 * @return bool
-	 */
-	public function isValid() : bool{
-		try{
-			$this->validate();
-			return true;
-		}catch(\InvalidArgumentException $e){
-			return false;
-		}
-	}
-
-	/**
-	 * @throws \InvalidArgumentException
-	 */
-	public function validate() : void{
-		if($this->skinId === ""){
-			throw new \InvalidArgumentException("Skin ID must not be empty");
-		}
-		$len = strlen($this->skinData);
-		if(!in_array($len, self::ACCEPTED_SKIN_SIZES, true)){
-			throw new \InvalidArgumentException("Invalid skin data size $len bytes (allowed sizes: " . implode(", ", self::ACCEPTED_SKIN_SIZES) . ")");
-		}
-		if($this->capeData !== "" and strlen($this->capeData) !== 8192){
-			throw new \InvalidArgumentException("Invalid cape data size " . strlen($this->capeData) . " bytes (must be exactly 8192 bytes)");
-		}
-		//TODO: validate geometry
 	}
 
 	/**
@@ -118,18 +116,5 @@ class Skin{
 	 */
 	public function getGeometryData() : string{
 		return $this->geometryData;
-	}
-
-	/**
-	 * Hack to cut down on network overhead due to skins, by un-pretty-printing geometry JSON.
-	 *
-	 * Mojang, some stupid reason, send every single model for every single skin in the selected skin-pack.
-	 * Not only that, they are pretty-printed.
-	 * TODO: find out what model crap can be safely dropped from the packet (unless it gets fixed first)
-	 */
-	public function debloatGeometryData() : void{
-		if($this->geometryData !== ""){
-			$this->geometryData = (string) json_encode(json_decode($this->geometryData));
-		}
 	}
 }

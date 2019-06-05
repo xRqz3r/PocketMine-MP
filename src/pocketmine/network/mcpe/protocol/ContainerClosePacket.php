@@ -35,6 +35,12 @@ class ContainerClosePacket extends DataPacket implements ClientboundPacket, Serv
 	/** @var int */
 	public $windowId;
 
+	public static function create(int $windowId) : self{
+		$result = new self;
+		$result->windowId = $windowId;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->windowId = $in->getByte();
 	}

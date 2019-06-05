@@ -30,26 +30,32 @@ use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\form\Form;
 use pocketmine\GameMode;
+use pocketmine\inventory\Inventory;
 use pocketmine\math\Vector3;
 use pocketmine\network\BadPacketException;
 use pocketmine\network\mcpe\handler\DeathSessionHandler;
 use pocketmine\network\mcpe\handler\HandshakeSessionHandler;
+use pocketmine\network\mcpe\handler\InGameSessionHandler;
 use pocketmine\network\mcpe\handler\LoginSessionHandler;
 use pocketmine\network\mcpe\handler\NullSessionHandler;
 use pocketmine\network\mcpe\handler\PreSpawnSessionHandler;
 use pocketmine\network\mcpe\handler\ResourcePacksSessionHandler;
 use pocketmine\network\mcpe\handler\SessionHandler;
-use pocketmine\network\mcpe\handler\SimpleSessionHandler;
 use pocketmine\network\mcpe\protocol\AdventureSettingsPacket;
 use pocketmine\network\mcpe\protocol\AvailableCommandsPacket;
 use pocketmine\network\mcpe\protocol\ChunkRadiusUpdatedPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
+use pocketmine\network\mcpe\protocol\ContainerSetDataPacket;
 use pocketmine\network\mcpe\protocol\DisconnectPacket;
+use pocketmine\network\mcpe\protocol\InventoryContentPacket;
+use pocketmine\network\mcpe\protocol\InventorySlotPacket;
+use pocketmine\network\mcpe\protocol\MobArmorEquipmentPacket;
 use pocketmine\network\mcpe\protocol\MobEffectPacket;
 use pocketmine\network\mcpe\protocol\ModalFormRequestPacket;
 use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\NetworkChunkPublisherUpdatePacket;
 use pocketmine\network\mcpe\protocol\Packet;
+use pocketmine\network\mcpe\protocol\PlayerListPacket;
 use pocketmine\network\mcpe\protocol\PlayStatusPacket;
 use pocketmine\network\mcpe\protocol\ServerboundPacket;
 use pocketmine\network\mcpe\protocol\ServerToClientHandshakePacket;
@@ -60,6 +66,8 @@ use pocketmine\network\mcpe\protocol\TransferPacket;
 use pocketmine\network\mcpe\protocol\types\CommandData;
 use pocketmine\network\mcpe\protocol\types\CommandEnum;
 use pocketmine\network\mcpe\protocol\types\CommandParameter;
+use pocketmine\network\mcpe\protocol\types\ContainerIds;
+use pocketmine\network\mcpe\protocol\types\PlayerListEntry;
 use pocketmine\network\mcpe\protocol\types\PlayerPermissions;
 use pocketmine\network\mcpe\protocol\UpdateAttributesPacket;
 use pocketmine\network\NetworkInterface;
@@ -71,6 +79,7 @@ use pocketmine\timings\Timings;
 use pocketmine\utils\BinaryDataException;
 use pocketmine\utils\Utils;
 use pocketmine\world\Position;
+use function array_map;
 use function bin2hex;
 use function count;
 use function get_class;
@@ -312,7 +321,7 @@ class NetworkSession{
 
 		try{
 			$packet->decode($stream);
-			if(!$stream->feof() and !$packet->mayHaveUnreadBytes()){
+			if(!$stream->feof()){
 				$remains = substr($stream->getBuffer(), $stream->getOffset());
 				$this->logger->debug("Still " . strlen($remains) . " bytes unread in " . $packet->getName() . ": " . bin2hex($remains));
 			}
@@ -454,10 +463,7 @@ class NetworkSession{
 	 */
 	public function transfer(string $ip, int $port, string $reason = "transfer") : void{
 		$this->tryDisconnect(function() use($ip, $port, $reason){
-			$pk = new TransferPacket();
-			$pk->address = $ip;
-			$pk->port = $port;
-			$this->sendDataPacket($pk, true);
+			$this->sendDataPacket(TransferPacket::create($ip, $port), true);
 			$this->disconnect($reason, false);
 			if($this->player !== null){
 				$this->player->disconnect($reason, null, false);
@@ -486,10 +492,7 @@ class NetworkSession{
 	 */
 	private function doServerDisconnect(string $reason, bool $notify = true) : void{
 		if($notify){
-			$pk = new DisconnectPacket();
-			$pk->message = $reason;
-			$pk->hideDisconnectionScreen = $reason === "";
-			$this->sendDataPacket($pk, true);
+			$this->sendDataPacket($reason === "" ? DisconnectPacket::silent() : DisconnectPacket::message($reason), true);
 		}
 
 		$this->interface->close($this, $notify ? $reason : "");
@@ -538,9 +541,7 @@ class NetworkSession{
 	}
 
 	public function enableEncryption(string $encryptionKey, string $handshakeJwt) : void{
-		$pk = new ServerToClientHandshakePacket();
-		$pk->jwt = $handshakeJwt;
-		$this->sendDataPacket($pk, true); //make sure this gets sent before encryption is enabled
+		$this->sendDataPacket(ServerToClientHandshakePacket::create($handshakeJwt), true); //make sure this gets sent before encryption is enabled
 
 		$this->cipher = new NetworkCipher($encryptionKey);
 
@@ -551,9 +552,7 @@ class NetworkSession{
 	public function onLoginSuccess() : void{
 		$this->loggedIn = true;
 
-		$pk = new PlayStatusPacket();
-		$pk->status = PlayStatusPacket::LOGIN_SUCCESS;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(PlayStatusPacket::create(PlayStatusPacket::LOGIN_SUCCESS));
 
 		$this->setHandler(new ResourcePacksSessionHandler($this, $this->server->getResourcePackManager()));
 	}
@@ -565,13 +564,11 @@ class NetworkSession{
 	}
 
 	public function onTerrainReady() : void{
-		$pk = new PlayStatusPacket();
-		$pk->status = PlayStatusPacket::PLAYER_SPAWN;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(PlayStatusPacket::create(PlayStatusPacket::PLAYER_SPAWN));
 	}
 
 	public function onSpawn() : void{
-		$this->setHandler(new SimpleSessionHandler($this->player, $this));
+		$this->setHandler(new InGameSessionHandler($this->player, $this));
 	}
 
 	public function onDeath() : void{
@@ -579,7 +576,7 @@ class NetworkSession{
 	}
 
 	public function onRespawn() : void{
-		$this->setHandler(new SimpleSessionHandler($this->player, $this));
+		$this->setHandler(new InGameSessionHandler($this->player, $this));
 	}
 
 	public function syncMovement(Vector3 $pos, ?float $yaw = null, ?float $pitch = null, int $mode = MovePlayerPacket::MODE_NORMAL) : void{
@@ -598,34 +595,19 @@ class NetworkSession{
 	}
 
 	public function syncViewAreaRadius(int $distance) : void{
-		$pk = new ChunkRadiusUpdatedPacket();
-		$pk->radius = $distance;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(ChunkRadiusUpdatedPacket::create($distance));
 	}
 
 	public function syncViewAreaCenterPoint(Vector3 $newPos, int $viewDistance) : void{
-		$pk = new NetworkChunkPublisherUpdatePacket();
-		$pk->x = $newPos->getFloorX();
-		$pk->y = $newPos->getFloorY();
-		$pk->z = $newPos->getFloorZ();
-		$pk->radius = $viewDistance * 16; //blocks, not chunks >.>
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(NetworkChunkPublisherUpdatePacket::create($newPos->getFloorX(), $newPos->getFloorY(), $newPos->getFloorZ(), $viewDistance * 16)); //blocks, not chunks >.>
 	}
 
 	public function syncPlayerSpawnPoint(Position $newSpawn) : void{
-		$pk = new SetSpawnPositionPacket();
-		$pk->x = $newSpawn->getFloorX();
-		$pk->y = $newSpawn->getFloorY();
-		$pk->z = $newSpawn->getFloorZ();
-		$pk->spawnType = SetSpawnPositionPacket::TYPE_PLAYER_SPAWN;
-		$pk->spawnForced = false;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(SetSpawnPositionPacket::playerSpawn($newSpawn->getFloorX(), $newSpawn->getFloorY(), $newSpawn->getFloorZ(), false)); //TODO: spawn forced
 	}
 
 	public function syncGameMode(GameMode $mode) : void{
-		$pk = new SetPlayerGameTypePacket();
-		$pk->gamemode = self::getClientFriendlyGamemode($mode);
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(SetPlayerGameTypePacket::create(self::getClientFriendlyGamemode($mode)));
 	}
 
 	/**
@@ -655,10 +637,7 @@ class NetworkSession{
 	public function syncAttributes(Living $entity, bool $sendAll = false){
 		$entries = $sendAll ? $entity->getAttributeMap()->getAll() : $entity->getAttributeMap()->needSend();
 		if(count($entries) > 0){
-			$pk = new UpdateAttributesPacket();
-			$pk->entityRuntimeId = $entity->getId();
-			$pk->entries = $entries;
-			$this->sendDataPacket($pk);
+			$this->sendDataPacket(UpdateAttributesPacket::create($entity->getId(), $entries));
 			foreach($entries as $entry){
 				$entry->markSynchronized();
 			}
@@ -666,24 +645,11 @@ class NetworkSession{
 	}
 
 	public function onEntityEffectAdded(Living $entity, EffectInstance $effect, bool $replacesOldEffect) : void{
-		$pk = new MobEffectPacket();
-		$pk->entityRuntimeId = $entity->getId();
-		$pk->eventId = $replacesOldEffect ? MobEffectPacket::EVENT_MODIFY : MobEffectPacket::EVENT_ADD;
-		$pk->effectId = $effect->getId();
-		$pk->amplifier = $effect->getAmplifier();
-		$pk->particles = $effect->isVisible();
-		$pk->duration = $effect->getDuration();
-
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(MobEffectPacket::add($entity->getId(), $replacesOldEffect, $effect->getId(), $effect->getAmplifier(), $effect->isVisible(), $effect->getDuration()));
 	}
 
 	public function onEntityEffectRemoved(Living $entity, EffectInstance $effect) : void{
-		$pk = new MobEffectPacket();
-		$pk->entityRuntimeId = $entity->getId();
-		$pk->eventId = MobEffectPacket::EVENT_REMOVE;
-		$pk->effectId = $effect->getId();
-
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(MobEffectPacket::remove($entity->getId(), $effect->getId()));
 	}
 
 	public function syncAvailableCommands() : void{
@@ -724,43 +690,27 @@ class NetworkSession{
 	}
 
 	public function onRawChatMessage(string $message) : void{
-		$pk = new TextPacket();
-		$pk->type = TextPacket::TYPE_RAW;
-		$pk->message = $message;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(TextPacket::raw($message));
 	}
 
 	public function onTranslatedChatMessage(string $key, array $parameters) : void{
-		$pk = new TextPacket();
-		$pk->type = TextPacket::TYPE_TRANSLATION;
-		$pk->needsTranslation = true;
-		$pk->message = $key;
-		$pk->parameters = $parameters;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(TextPacket::translation($key, $parameters));
 	}
 
 	public function onPopup(string $message) : void{
-		$pk = new TextPacket();
-		$pk->type = TextPacket::TYPE_POPUP;
-		$pk->message = $message;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(TextPacket::popup($message));
 	}
 
 	public function onTip(string $message) : void{
-		$pk = new TextPacket();
-		$pk->type = TextPacket::TYPE_TIP;
-		$pk->message = $message;
-		$this->sendDataPacket($pk);
+		$this->sendDataPacket(TextPacket::tip($message));
 	}
 
 	public function onFormSent(int $id, Form $form) : bool{
-		$pk = new ModalFormRequestPacket();
-		$pk->formId = $id;
-		$pk->formData = json_encode($form);
-		if($pk->formData === false){
+		$formData = json_encode($form);
+		if($formData === false){
 			throw new \InvalidArgumentException("Failed to encode form JSON: " . json_last_error_msg());
 		}
-		return $this->sendDataPacket($pk);
+		return $this->sendDataPacket(ModalFormRequestPacket::create($id, $formData));
 	}
 
 	/**
@@ -794,6 +744,54 @@ class NetworkSession{
 
 	}
 
+	public function syncInventorySlot(Inventory $inventory, int $slot) : void{
+		$windowId = $this->player->getWindowId($inventory);
+		if($windowId !== ContainerIds::NONE){
+			$this->sendDataPacket(InventorySlotPacket::create($windowId, $slot, $inventory->getItem($slot)));
+		}
+	}
+
+	public function syncInventoryContents(Inventory $inventory) : void{
+		$windowId = $this->player->getWindowId($inventory);
+		if($windowId !== ContainerIds::NONE){
+			$this->sendDataPacket(InventoryContentPacket::create($windowId, $inventory->getContents(true)));
+		}
+	}
+
+	public function syncAllInventoryContents() : void{
+		foreach($this->player->getAllWindows() as $inventory){
+			$this->syncInventoryContents($inventory);
+		}
+	}
+
+	public function syncInventoryData(Inventory $inventory, int $propertyId, int $value) : void{
+		$windowId = $this->player->getWindowId($inventory);
+		if($windowId !== ContainerIds::NONE){
+			$this->sendDataPacket(ContainerSetDataPacket::create($windowId, $propertyId, $value));
+		}
+	}
+
+	public function onMobArmorChange(Living $mob) : void{
+		$inv = $mob->getArmorInventory();
+		$this->sendDataPacket(MobArmorEquipmentPacket::create($mob->getId(), $inv->getHelmet(), $inv->getChestplate(), $inv->getLeggings(), $inv->getBoots()));
+	}
+
+	public function syncPlayerList() : void{
+		$this->sendDataPacket(PlayerListPacket::add(array_map(function(Player $player){
+			return PlayerListEntry::createAdditionEntry($player->getUniqueId(), $player->getId(), $player->getDisplayName(), $player->getSkin(), $player->getXuid());
+		}, $this->server->getOnlinePlayers())));
+	}
+
+	public function onPlayerAdded(Player $p) : void{
+		$this->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($p->getUniqueId(), $p->getId(), $p->getName(), $p->getSkin(), $p->getXuid())]));
+	}
+
+	public function onPlayerRemoved(Player $p) : void{
+		if($p !== $this->player){
+			$this->sendDataPacket(PlayerListPacket::remove([PlayerListEntry::createRemovalEntry($p->getUniqueId())]));
+		}
+	}
+
 	public function tick() : bool{
 		if($this->handler instanceof LoginSessionHandler){
 			if(time() >= $this->connectTime + 10){
@@ -821,7 +819,7 @@ class NetworkSession{
 	 * @return int
 	 */
 	public static function getClientFriendlyGamemode(GameMode $gamemode) : int{
-		if($gamemode === GameMode::SPECTATOR()){
+		if($gamemode->equals(GameMode::SPECTATOR())){
 			return GameMode::CREATIVE()->getMagicNumber();
 		}
 

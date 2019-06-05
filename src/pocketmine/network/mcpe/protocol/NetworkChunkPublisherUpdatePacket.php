@@ -40,6 +40,15 @@ class NetworkChunkPublisherUpdatePacket extends DataPacket implements Clientboun
 	/** @var int */
 	public $radius;
 
+	public static function create(int $x, int $y, int $z, int $blockRadius) : self{
+		$result = new self;
+		$result->x = $x;
+		$result->y = $y;
+		$result->z = $z;
+		$result->radius = $blockRadius;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$in->getSignedBlockPosition($this->x, $this->y, $this->z);
 		$this->radius = $in->getUnsignedVarInt();

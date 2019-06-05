@@ -27,17 +27,13 @@ namespace pocketmine\network\mcpe\protocol;
 
 
 use Particle\Validator\Validator;
-use pocketmine\entity\Skin;
 use pocketmine\network\BadPacketException;
 use pocketmine\network\mcpe\handler\SessionHandler;
 use pocketmine\network\mcpe\NetworkBinaryStream;
-use pocketmine\PlayerInfo;
 use pocketmine\utils\BinaryDataException;
 use pocketmine\utils\BinaryStream;
 use pocketmine\utils\Utils;
-use pocketmine\utils\UUID;
 use function array_filter;
-use function base64_decode;
 use function count;
 use function implode;
 use function is_array;
@@ -66,9 +62,6 @@ class LoginPacket extends DataPacket implements ServerboundPacket{
 	/** @var int */
 	public $protocol;
 
-	/** @var PlayerInfo */
-	public $playerInfo;
-
 	/** @var string[] array of encoded JWT */
 	public $chainDataJwt = [];
 	/** @var array|null extraData index of whichever JWT has it */
@@ -88,10 +81,6 @@ class LoginPacket extends DataPacket implements ServerboundPacket{
 
 	public function canBeSentBeforeLogin() : bool{
 		return true;
-	}
-
-	public function mayHaveUnreadBytes() : bool{
-		return $this->protocol !== null and $this->protocol !== ProtocolInfo::CURRENT_PROTOCOL;
 	}
 
 	protected function decodePayload(NetworkBinaryStream $in) : void{
@@ -186,21 +175,6 @@ class LoginPacket extends DataPacket implements ServerboundPacket{
 		self::validate($v, 'clientData', $clientData);
 
 		$this->clientData = $clientData;
-
-		$this->playerInfo = new PlayerInfo(
-			$this->extraData[self::I_USERNAME],
-			UUID::fromString($this->extraData[self::I_UUID]),
-			new Skin(
-				$this->clientData[self::I_SKIN_ID],
-				base64_decode($this->clientData[self::I_SKIN_DATA]),
-				base64_decode($this->clientData[self::I_CAPE_DATA]),
-				$this->clientData[self::I_GEOMETRY_NAME],
-				base64_decode($this->clientData[self::I_GEOMETRY_DATA])
-			),
-			$this->clientData[self::I_LANGUAGE_CODE],
-			$this->extraData[self::I_XUID],
-			$this->clientData[self::I_CLIENT_RANDOM_ID]
-		);
 	}
 
 	protected function encodePayload(NetworkBinaryStream $out) : void{

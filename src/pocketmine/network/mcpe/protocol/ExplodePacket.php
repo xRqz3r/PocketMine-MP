@@ -41,6 +41,22 @@ class ExplodePacket extends DataPacket implements ClientboundPacket{
 	/** @var Vector3[] */
 	public $records = [];
 
+	/**
+	 * @param Vector3   $center
+	 * @param float     $radius
+	 * @param Vector3[] $records
+	 *
+	 * @return ExplodePacket
+	 */
+	public static function create(Vector3 $center, float $radius, array $records) : self{
+		(function(Vector3 ...$_){})($records);
+		$result = new self;
+		$result->position = $center;
+		$result->radius = $radius;
+		$result->records = $records;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->position = $in->getVector3();
 		$this->radius = (float) ($in->getVarInt() / 32);

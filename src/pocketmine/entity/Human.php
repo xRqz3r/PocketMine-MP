@@ -28,12 +28,10 @@ use pocketmine\entity\effect\EffectInstance;
 use pocketmine\entity\projectile\ProjectileSource;
 use pocketmine\entity\utils\ExperienceUtils;
 use pocketmine\event\entity\EntityDamageEvent;
-use pocketmine\event\entity\EntityInventoryChangeEvent;
 use pocketmine\event\entity\EntityRegainHealthEvent;
 use pocketmine\event\player\PlayerExhaustEvent;
 use pocketmine\event\player\PlayerExperienceChangeEvent;
 use pocketmine\inventory\EnderChestInventory;
-use pocketmine\inventory\Inventory;
 use pocketmine\inventory\InventoryHolder;
 use pocketmine\inventory\PlayerInventory;
 use pocketmine\item\Consumable;
@@ -107,28 +105,16 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 			if($skinTag === null){
 				throw new \InvalidStateException((new \ReflectionClass($this))->getShortName() . " must have a valid skin set");
 			}
-			$this->skin = self::deserializeSkinNBT($skinTag); //this throws if the skin is invalid
+			$this->skin = new Skin( //this throws if the skin is invalid
+				$skinTag->getString("Name"),
+				$skinTag->hasTag("Data", StringTag::class) ? $skinTag->getString("Data") : $skinTag->getByteArray("Data"), //old data (this used to be saved as a StringTag in older versions of PM)
+				$skinTag->getByteArray("CapeData", ""),
+				$skinTag->getString("GeometryName", ""),
+				$skinTag->getByteArray("GeometryData", "")
+			);
 		}
 
 		parent::__construct($world, $nbt);
-	}
-
-	/**
-	 * @param CompoundTag $skinTag
-	 *
-	 * @return Skin
-	 * @throws \InvalidArgumentException
-	 */
-	protected static function deserializeSkinNBT(CompoundTag $skinTag) : Skin{
-		$skin = new Skin(
-			$skinTag->getString("Name"),
-			$skinTag->hasTag("Data", StringTag::class) ? $skinTag->getString("Data") : $skinTag->getByteArray("Data"), //old data (this used to be saved as a StringTag in older versions of PM)
-			$skinTag->getByteArray("CapeData", ""),
-			$skinTag->getString("GeometryName", ""),
-			$skinTag->getByteArray("GeometryData", "")
-		);
-		$skin->validate();
-		return $skin;
 	}
 
 	/**
@@ -173,9 +159,7 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 	 * @param Skin $skin
 	 */
 	public function setSkin(Skin $skin) : void{
-		$skin->validate();
 		$this->skin = $skin;
-		$this->skin->debloatGeometryData();
 	}
 
 	/**
@@ -620,8 +604,8 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 
 		$inventoryTag = $nbt->getListTag("Inventory");
 		if($inventoryTag !== null){
-			$armorListener = $this->armorInventory->getSlotChangeListener();
-			$this->armorInventory->setSlotChangeListener(null);
+			$armorListeners = $this->armorInventory->getChangeListeners();
+			$this->armorInventory->removeChangeListeners(...$armorListeners);
 
 			/** @var CompoundTag $item */
 			foreach($inventoryTag as $i => $item){
@@ -635,7 +619,7 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 				}
 			}
 
-			$this->armorInventory->setSlotChangeListener($armorListener);
+			$this->armorInventory->addChangeListeners(...$armorListeners);
 		}
 
 		$enderChestInventoryTag = $nbt->getListTag("EnderChestInventory");
@@ -647,16 +631,6 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 		}
 
 		$this->inventory->setHeldItemIndex($nbt->getInt("SelectedInventorySlot", 0), false);
-
-		$this->inventory->setSlotChangeListener(function(Inventory $inventory, int $slot, Item $oldItem, Item $newItem) : ?Item{
-			$ev = new EntityInventoryChangeEvent($this, $oldItem, $newItem, $slot);
-			$ev->call();
-			if($ev->isCancelled()){
-				return null;
-			}
-
-			return $ev->getNewItem();
-		});
 
 		$this->setFood((float) $nbt->getInt("foodLevel", (int) $this->getFood(), true));
 		$this->setExhaustion($nbt->getFloat("foodExhaustionLevel", $this->getExhaustion(), true));
@@ -853,14 +827,9 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 	}
 
 	protected function sendSpawnPacket(Player $player) : void{
-		$this->skin->validate();
-
 		if(!($this instanceof Player)){
 			/* we don't use Server->updatePlayerListData() because that uses batches, which could cause race conditions in async compression mode */
-			$pk = new PlayerListPacket();
-			$pk->type = PlayerListPacket::TYPE_ADD;
-			$pk->entries = [PlayerListEntry::createAdditionEntry($this->uuid, $this->id, $this->getName(), $this->skin)];
-			$player->sendDataPacket($pk);
+			$player->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($this->uuid, $this->id, $this->getName(), $this->skin)]));
 		}
 
 		$pk = new AddPlayerPacket();
@@ -878,13 +847,10 @@ class Human extends Creature implements ProjectileSource, InventoryHolder{
 		//TODO: Hack for MCPE 1.2.13: DATA_NAMETAG is useless in AddPlayerPacket, so it has to be sent separately
 		$this->sendData($player, [EntityMetadataProperties::NAMETAG => [EntityMetadataTypes::STRING, $this->getNameTag()]]);
 
-		$this->armorInventory->sendContents($player);
+		$player->getNetworkSession()->onMobArmorChange($this);
 
 		if(!($this instanceof Player)){
-			$pk = new PlayerListPacket();
-			$pk->type = PlayerListPacket::TYPE_REMOVE;
-			$pk->entries = [PlayerListEntry::createRemovalEntry($this->uuid)];
-			$player->sendDataPacket($pk);
+			$player->sendDataPacket(PlayerListPacket::remove([PlayerListEntry::createRemovalEntry($this->uuid)]));
 		}
 	}
 

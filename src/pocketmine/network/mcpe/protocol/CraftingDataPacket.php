@@ -111,11 +111,10 @@ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
 						}
 					}
 					try{
-						$input = ItemFactory::get($inputId, $inputData);
+						$entry["input"] = ItemFactory::get($inputId, $inputData);
 					}catch(\InvalidArgumentException $e){
 						throw new BadPacketException($e->getMessage(), 0, $e);
 					}
-					$entry["input"] = $input;
 					$entry["output"] = $in->getSlot();
 					$entry["block"] = $in->getString();
 

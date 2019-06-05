@@ -38,6 +38,12 @@ class ServerToClientHandshakePacket extends DataPacket implements ClientboundPac
 	 */
 	public $jwt;
 
+	public static function create(string $jwt) : self{
+		$result = new self;
+		$result->jwt = $jwt;
+		return $result;
+	}
+
 	public function canBeSentBeforeLogin() : bool{
 		return true;
 	}

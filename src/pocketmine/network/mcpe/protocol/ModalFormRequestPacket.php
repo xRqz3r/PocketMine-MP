@@ -36,6 +36,13 @@ class ModalFormRequestPacket extends DataPacket implements ClientboundPacket{
 	/** @var string */
 	public $formData; //json
 
+	public static function create(int $formId, string $formData) : self{
+		$result = new self;
+		$result->formId = $formId;
+		$result->formData = $formData;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->formId = $in->getUnsignedVarInt();
 		$this->formData = $in->getString();

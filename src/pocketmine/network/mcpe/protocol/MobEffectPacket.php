@@ -49,6 +49,25 @@ class MobEffectPacket extends DataPacket implements ClientboundPacket{
 	/** @var int */
 	public $duration = 0;
 
+	public static function add(int $entityRuntimeId, bool $replace, int $effectId, int $amplifier, bool $particles, int $duration) : self{
+		$result = new self;
+		$result->eventId = $replace ? self::EVENT_MODIFY : self::EVENT_ADD;
+		$result->entityRuntimeId = $entityRuntimeId;
+		$result->effectId = $effectId;
+		$result->amplifier = $amplifier;
+		$result->particles = $particles;
+		$result->duration = $duration;
+		return $result;
+	}
+
+	public static function remove(int $entityRuntimeId, int $effectId) : self{
+		$pk = new self;
+		$pk->eventId = self::EVENT_REMOVE;
+		$pk->entityRuntimeId = $entityRuntimeId;
+		$pk->effectId = $effectId;
+		return $pk;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->entityRuntimeId = $in->getEntityRuntimeId();
 		$this->eventId = $in->getByte();

@@ -23,12 +23,12 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\block\tile\ItemFrame as TileItemFrame;
 use pocketmine\block\utils\BlockDataValidator;
 use pocketmine\item\Item;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
-use pocketmine\tile\ItemFrame as TileItemFrame;
 use function lcg_value;
 
 class ItemFrame extends Flowable{
@@ -54,7 +54,7 @@ class ItemFrame extends Flowable{
 	}
 
 	public function readStateFromData(int $id, int $stateMeta) : void{
-		$this->facing = BlockDataValidator::readHorizontalFacing(5 - ($stateMeta & 0x03));
+		$this->facing = BlockDataValidator::read5MinusHorizontalFacing($stateMeta);
 		$this->hasMap = ($stateMeta & BlockLegacyMetadata::ITEM_FRAME_FLAG_HAS_MAP) !== 0;
 	}
 
@@ -197,8 +197,8 @@ class ItemFrame extends Flowable{
 		return $drops;
 	}
 
-	public function getPickedItem() : Item{
-		return $this->framedItem !== null ? clone $this->framedItem : parent::getPickedItem();
+	public function getPickedItem(bool $addUserData = false) : Item{
+		return $this->framedItem !== null ? clone $this->framedItem : parent::getPickedItem($addUserData);
 	}
 
 	public function isAffectedBySilkTouch() : bool{

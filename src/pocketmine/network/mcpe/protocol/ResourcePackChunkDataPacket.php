@@ -43,6 +43,15 @@ class ResourcePackChunkDataPacket extends DataPacket implements ClientboundPacke
 	/** @var string */
 	public $data;
 
+	public static function create(string $packId, int $chunkIndex, int $chunkOffset, string $data) : self{
+		$result = new self;
+		$result->packId = $packId;
+		$result->chunkIndex = $chunkIndex;
+		$result->progress = $chunkOffset;
+		$result->data = $data;
+		return $result;
+	}
+
 	protected function decodePayload(NetworkBinaryStream $in) : void{
 		$this->packId = $in->getString();
 		$this->chunkIndex = $in->getLInt();

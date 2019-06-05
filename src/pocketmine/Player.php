@@ -74,7 +74,6 @@ use pocketmine\inventory\CraftingGrid;
 use pocketmine\inventory\Inventory;
 use pocketmine\inventory\PlayerCursorInventory;
 use pocketmine\item\Consumable;
-use pocketmine\item\Durable;
 use pocketmine\item\enchantment\EnchantmentInstance;
 use pocketmine\item\enchantment\MeleeWeaponEnchantment;
 use pocketmine\item\Item;
@@ -106,7 +105,6 @@ use pocketmine\permission\PermissionAttachment;
 use pocketmine\permission\PermissionAttachmentInfo;
 use pocketmine\permission\PermissionManager;
 use pocketmine\plugin\Plugin;
-use pocketmine\tile\Tile;
 use pocketmine\timings\Timings;
 use pocketmine\utils\TextFormat;
 use pocketmine\utils\UUID;
@@ -184,7 +182,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	/** @var PlayerInfo */
 	protected $playerInfo;
 
-	protected $windowCnt = 2;
+	protected $lastInventoryNetworkId = 2;
 	/** @var int[] */
 	protected $windows = [];
 	/** @var Inventory[] */
@@ -271,6 +269,9 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	/** @var Form[] */
 	protected $forms = [];
 
+	/** @var \Logger */
+	protected $logger;
+
 	/**
 	 * @param Server         $server
 	 * @param NetworkSession $session
@@ -278,13 +279,16 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @param bool           $authenticated
 	 */
 	public function __construct(Server $server, NetworkSession $session, PlayerInfo $playerInfo, bool $authenticated){
+		$username = TextFormat::clean($playerInfo->getUsername());
+		$this->logger = new \PrefixedLogger($server->getLogger(), "Player: $username");
+
 		$this->server = $server;
 		$this->networkSession = $session;
 		$this->playerInfo = $playerInfo;
 		$this->authenticated = $authenticated;
 		$this->skin = $this->playerInfo->getSkin();
 
-		$this->username = TextFormat::clean($this->playerInfo->getUsername());
+		$this->username = $username;
 		$this->displayName = $this->username;
 		$this->iusername = strtolower($this->username);
 		$this->locale = $this->playerInfo->getLocale();
@@ -650,7 +654,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 
 		$this->networkSession->syncViewAreaRadius($this->viewDistance);
 
-		$this->server->getLogger()->debug("Setting view distance for " . $this->getName() . " to " . $this->viewDistance . " (requested " . $distance . ")");
+		$this->logger->debug("Setting view distance to " . $this->viewDistance . " (requested " . $distance . ")");
 	}
 
 	/**
@@ -798,9 +802,6 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 */
 	public function setDisplayName(string $name){
 		$this->displayName = $name;
-		if($this->spawned){
-			$this->server->updatePlayerListData($this->getUniqueId(), $this->getId(), $this->getDisplayName(), $this->getSkin(), $this->getXuid());
-		}
 	}
 
 	/**
@@ -822,10 +823,6 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @return bool
 	 */
 	public function changeSkin(Skin $skin, string $newSkinName, string $oldSkinName) : bool{
-		if(!$skin->isValid()){
-			return false;
-		}
-
 		$ev = new PlayerChangeSkinEvent($this, $this->getSkin(), $skin);
 		$ev->call();
 
@@ -1321,7 +1318,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @return bool
 	 */
 	public function isSurvival(bool $literal = false) : bool{
-		return $this->gamemode === GameMode::SURVIVAL() or (!$literal and $this->gamemode === GameMode::ADVENTURE());
+		return $this->gamemode->equals(GameMode::SURVIVAL()) or (!$literal and $this->gamemode->equals(GameMode::ADVENTURE()));
 	}
 
 	/**
@@ -1333,7 +1330,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @return bool
 	 */
 	public function isCreative(bool $literal = false) : bool{
-		return $this->gamemode === GameMode::CREATIVE() or (!$literal and $this->gamemode === GameMode::SPECTATOR());
+		return $this->gamemode->equals(GameMode::CREATIVE()) or (!$literal and $this->gamemode->equals(GameMode::SPECTATOR()));
 	}
 
 	/**
@@ -1345,14 +1342,14 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @return bool
 	 */
 	public function isAdventure(bool $literal = false) : bool{
-		return $this->gamemode === GameMode::ADVENTURE() or (!$literal and $this->gamemode === GameMode::SPECTATOR());
+		return $this->gamemode->equals(GameMode::ADVENTURE()) or (!$literal and $this->gamemode->equals(GameMode::SPECTATOR()));
 	}
 
 	/**
 	 * @return bool
 	 */
 	public function isSpectator() : bool{
-		return $this->gamemode === GameMode::SPECTATOR();
+		return $this->gamemode->equals(GameMode::SPECTATOR());
 	}
 
 	/**
@@ -1361,7 +1358,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @return bool
 	 */
 	public function hasFiniteResources() : bool{
-		return $this->gamemode === GameMode::SURVIVAL() or $this->gamemode === GameMode::ADVENTURE();
+		return $this->gamemode->equals(GameMode::SURVIVAL()) or $this->gamemode->equals(GameMode::ADVENTURE());
 	}
 
 	public function isFireProof() : bool{
@@ -1434,7 +1431,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		$newPos = $newPos->asVector3();
 		if($this->isTeleporting and $newPos->distanceSquared($this) > 1){  //Tolerate up to 1 block to avoid problems with client-sided physics when spawning in blocks
 			$this->sendPosition($this, null, null, MovePlayerPacket::MODE_RESET);
-			$this->server->getLogger()->debug("Got outdated pre-teleport movement from " . $this->getName() . ", received " . $newPos . ", expected " . $this->asVector3());
+			$this->logger->debug("Got outdated pre-teleport movement, received " . $newPos . ", expected " . $this->asVector3());
 			//Still getting movements from before teleport, ignore them
 			return false;
 		}
@@ -1476,8 +1473,8 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 			 * If you must tamper with this code, be aware that this can cause very nasty results. Do not waste our time
 			 * asking for help if you suffer the consequences of messing with this.
 			 */
-			$this->server->getLogger()->warning($this->getName() . " moved too fast, reverting movement");
-			$this->server->getLogger()->debug("Old position: " . $this->asVector3() . ", new position: " . $this->newPosition);
+			$this->logger->warning("Moved too fast, reverting movement");
+			$this->logger->debug("Old position: " . $this->asVector3() . ", new position: " . $this->newPosition);
 			$revert = true;
 		}elseif(!$this->world->isInLoadedTerrain($newPos) or !$this->world->isChunkGenerated($newPos->getFloorX() >> 4, $newPos->getFloorZ() >> 4)){
 			$revert = true;
@@ -1501,8 +1498,8 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 
 				if(!$ev->isCancelled()){
 					$revert = true;
-					$this->server->getLogger()->warning($this->getServer()->getLanguage()->translateString("pocketmine.player.invalidMove", [$this->getName()]));
-					$this->server->getLogger()->debug("Old position: " . $this->asVector3() . ", new position: " . $this->newPosition);
+					$this->logger->warning($this->getServer()->getLanguage()->translateString("pocketmine.player.invalidMove", [$this->getName()]));
+					$this->logger->debug("Old position: " . $this->asVector3() . ", new position: " . $this->newPosition);
 				}
 			}
 
@@ -1723,15 +1720,13 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	}
 
 	public function equipItem(int $hotbarSlot) : bool{
-		if(!$this->inventory->isHotbarSlot($hotbarSlot)){
-			$this->inventory->sendContents($this);
+		if(!$this->inventory->isHotbarSlot($hotbarSlot)){ //TODO: exception here?
 			return false;
 		}
 
 		$ev = new PlayerItemHeldEvent($this, $this->inventory->getItem($hotbarSlot), $hotbarSlot);
 		$ev->call();
 		if($ev->isCancelled()){
-			$this->inventory->sendHeldItem($this);
 			return false;
 		}
 
@@ -1758,18 +1753,17 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		$ev->call();
 
 		if($ev->isCancelled()){
-			$this->inventory->sendHeldItem($this);
 			return false;
 		}
 
 		$result = $item->onClickAir($this, $directionVector);
-		if($result === ItemUseResult::SUCCESS()){
-			$this->resetItemCooldown($item);
-			if($this->hasFiniteResources()){
-				$this->inventory->setItemInHand($item);
-			}
-		}elseif($result === ItemUseResult::FAIL()){
-			$this->inventory->sendHeldItem($this);
+		if($result->equals(ItemUseResult::FAIL())){
+			return false;
+		}
+
+		$this->resetItemCooldown($item);
+		if($this->hasFiniteResources()){
+			$this->inventory->setItemInHand($item);
 		}
 
 		//TODO: check if item has a release action - if it doesn't, this shouldn't be set
@@ -1781,7 +1775,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	/**
 	 * Consumes the currently-held item.
 	 *
-	 * @return bool
+	 * @return bool if the consumption succeeded.
 	 */
 	public function consumeHeldItem() : bool{
 		$slot = $this->inventory->getItemInHand();
@@ -1793,8 +1787,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 			$ev->call();
 
 			if($ev->isCancelled() or !$this->consumeObject($slot)){
-				$this->inventory->sendContents($this);
-				return true;
+				return false;
 			}
 
 			$this->resetItemCooldown($slot);
@@ -1818,22 +1811,16 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 */
 	public function releaseHeldItem() : bool{
 		try{
-			if($this->isUsingItem()){
-				$item = $this->inventory->getItemInHand();
-				if($this->hasItemCooldown($item)){
-					$this->inventory->sendContents($this);
-					return false;
-				}
-				$result = $item->onReleaseUsing($this);
-				if($result === ItemUseResult::SUCCESS()){
-					$this->resetItemCooldown($item);
-					$this->inventory->setItemInHand($item);
-					return true;
-				}
-				if($result === ItemUseResult::FAIL()){
-					$this->inventory->sendContents($this);
-					return true;
-				}
+			$item = $this->inventory->getItemInHand();
+			if(!$this->isUsingItem() or $this->hasItemCooldown($item)){
+				return false;
+			}
+
+			$result = $item->onReleaseUsing($this);
+			if($result->equals(ItemUseResult::SUCCESS())){
+				$this->resetItemCooldown($item);
+				$this->inventory->setItemInHand($item);
+				return true;
 			}
 
 			return false;
@@ -1848,17 +1835,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 			return true;
 		}
 
-		$item = $block->getPickedItem();
-		if($addTileNBT){
-			$tile = $this->getWorld()->getTile($block);
-			if($tile instanceof Tile){
-				$nbt = $tile->getCleanedNBT();
-				if($nbt instanceof CompoundTag){
-					$item->setCustomBlockData($nbt);
-					$item->setLore(["+(DATA)"]);
-				}
-			}
-		}
+		$item = $block->getPickedItem($addTileNBT);
 
 		$ev = new PlayerBlockPickEvent($this, $block, $item);
 		$ev->call();
@@ -1894,7 +1871,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @param Vector3 $pos
 	 * @param int     $face
 	 *
-	 * @return bool
+	 * @return bool if an action took place successfully
 	 */
 	public function attackBlock(Vector3 $pos, int $face) : bool{
 		if($pos->distanceSquared($this) > 10000){
@@ -1906,9 +1883,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		$ev = new PlayerInteractEvent($this, $this->inventory->getItemInHand(), $target, null, $face, PlayerInteractEvent::LEFT_CLICK_BLOCK);
 		$ev->call();
 		if($ev->isCancelled()){
-			$this->world->sendBlocks([$this], [$target]);
-			$this->inventory->sendHeldItem($this);
-			return true;
+			return false;
 		}
 		if($target->onAttack($this->inventory->getItemInHand(), $face, $this)){
 			return true;
@@ -2007,7 +1982,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		}
 		if($entity instanceof ItemEntity or $entity instanceof Arrow){
 			$this->kick("Attempting to attack an invalid entity");
-			$this->server->getLogger()->warning($this->getServer()->getLanguage()->translateString("pocketmine.player.invalidEntity", [$this->getName()]));
+			$this->logger->warning($this->getServer()->getLanguage()->translateString("pocketmine.player.invalidEntity", [$this->getName()]));
 			return false;
 		}
 
@@ -2037,9 +2012,6 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		$entity->attack($ev);
 
 		if($ev->isCancelled()){
-			if($heldItem instanceof Durable and $this->hasFiniteResources()){
-				$this->inventory->sendContents($this);
-			}
 			return false;
 		}
 
@@ -2339,15 +2311,15 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 */
 	public function onFormSubmit(int $formId, $responseData) : bool{
 		if(!isset($this->forms[$formId])){
-			$this->server->getLogger()->debug("Got unexpected response for form $formId");
+			$this->logger->debug("Got unexpected response for form $formId");
 			return false;
 		}
 
 		try{
 			$this->forms[$formId]->handleResponse($this, $responseData);
 		}catch(FormValidationException $e){
-			$this->server->getLogger()->critical("Failed to validate form " . get_class($this->forms[$formId]) . ": " . $e->getMessage());
-			$this->server->getLogger()->logException($e);
+			$this->logger->critical("Failed to validate form " . get_class($this->forms[$formId]) . ": " . $e->getMessage());
+			$this->logger->logException($e);
 		}finally{
 			unset($this->forms[$formId]);
 		}
@@ -2621,7 +2593,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		$this->sendData($this->getViewers());
 
 		$this->networkSession->syncAdventureSettings($this);
-		$this->sendAllInventories();
+		$this->networkSession->syncAllInventoryContents();
 
 		$this->spawnToAll();
 		$this->scheduleUpdate();
@@ -2826,7 +2798,7 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * player is already viewing the specified inventory.
 	 *
 	 * @param Inventory $inventory
-	 * @param int|null  $forceId Forces a special ID for the window
+	 * @param int|null  $forceNetworkId Forces a special ID for the window
 	 * @param bool      $isPermanent Prevents the window being removed if true.
 	 *
 	 * @return int
@@ -2834,34 +2806,34 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @throws \InvalidArgumentException if a forceID which is already in use is specified
 	 * @throws \InvalidStateException if trying to add a window without forceID when no slots are free
 	 */
-	public function addWindow(Inventory $inventory, ?int $forceId = null, bool $isPermanent = false) : int{
+	public function addWindow(Inventory $inventory, ?int $forceNetworkId = null, bool $isPermanent = false) : int{
 		if(($id = $this->getWindowId($inventory)) !== ContainerIds::NONE){
 			return $id;
 		}
 
-		if($forceId === null){
-			$cnt = $this->windowCnt;
+		if($forceNetworkId === null){
+			$networkId = $this->lastInventoryNetworkId;
 			do{
-				$cnt = max(ContainerIds::FIRST, ($cnt + 1) % ContainerIds::LAST);
-				if($cnt === $this->windowCnt){ //wraparound, no free slots
+				$networkId = max(ContainerIds::FIRST, ($networkId + 1) % ContainerIds::LAST);
+				if($networkId === $this->lastInventoryNetworkId){ //wraparound, no free slots
 					throw new \InvalidStateException("No free window IDs found");
 				}
-			}while(isset($this->windowIndex[$cnt]));
-			$this->windowCnt = $cnt;
+			}while(isset($this->windowIndex[$networkId]));
+			$this->lastInventoryNetworkId = $networkId;
 		}else{
-			$cnt = $forceId;
-			if(isset($this->windowIndex[$cnt])){
-				throw new \InvalidArgumentException("Requested force ID $forceId already in use");
+			$networkId = $forceNetworkId;
+			if(isset($this->windowIndex[$networkId])){
+				throw new \InvalidArgumentException("Requested force ID $forceNetworkId already in use");
 			}
 		}
 
-		$this->windowIndex[$cnt] = $inventory;
-		$this->windows[spl_object_id($inventory)] = $cnt;
+		$this->windowIndex[$networkId] = $inventory;
+		$this->windows[spl_object_id($inventory)] = $networkId;
 		if($inventory->open($this)){
 			if($isPermanent){
-				$this->permanentWindows[$cnt] = true;
+				$this->permanentWindows[spl_object_id($inventory)] = true;
 			}
-			return $cnt;
+			return $networkId;
 		}else{
 			$this->removeWindow($inventory);
 
@@ -2878,15 +2850,15 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @throws \InvalidArgumentException if trying to remove a fixed inventory window without the `force` parameter as true
 	 */
 	public function removeWindow(Inventory $inventory, bool $force = false){
-		$id = $this->windows[$hash = spl_object_id($inventory)] ?? null;
-
-		if($id !== null and !$force and isset($this->permanentWindows[$id])){
-			throw new \InvalidArgumentException("Cannot remove fixed window $id (" . get_class($inventory) . ") from " . $this->getName());
+		$objectId = spl_object_id($inventory);
+		if(!$force and isset($this->permanentWindows[$objectId])){
+			throw new \InvalidArgumentException("Cannot remove fixed window " . get_class($inventory) . " from " . $this->getName());
 		}
 
-		if($id !== null){
+		$networkId = $this->windows[$objectId] ?? null;
+		if($networkId !== null){
 			$inventory->close($this);
-			unset($this->windows[$hash], $this->windowIndex[$id], $this->permanentWindows[$id]);
+			unset($this->windows[$objectId], $this->windowIndex[$networkId], $this->permanentWindows[$objectId]);
 		}
 	}
 
@@ -2896,8 +2868,8 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 	 * @param bool $removePermanentWindows Whether to remove permanent windows.
 	 */
 	public function removeAllWindows(bool $removePermanentWindows = false){
-		foreach($this->windowIndex as $id => $window){
-			if(!$removePermanentWindows and isset($this->permanentWindows[$id])){
+		foreach($this->windowIndex as $networkId => $window){
+			if(!$removePermanentWindows and isset($this->permanentWindows[spl_object_id($window)])){
 				continue;
 			}
 
@@ -2905,10 +2877,11 @@ class Player extends Human implements CommandSender, ChunkLoader, ChunkListener,
 		}
 	}
 
-	public function sendAllInventories(){
-		foreach($this->windowIndex as $id => $inventory){
-			$inventory->sendContents($this);
-		}
+	/**
+	 * @return Inventory[]
+	 */
+	public function getAllWindows() : array{
+		return $this->windowIndex;
 	}
 
 	public function setMetadata(string $metadataKey, MetadataValue $newMetadataValue) : void{

@@ -23,12 +23,12 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\block\tile\FlowerPot as TileFlowerPot;
 use pocketmine\item\Item;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
-use pocketmine\tile\FlowerPot as TileFlowerPot;
 use function assert;
 
 class FlowerPot extends Flowable{
@@ -150,8 +150,8 @@ class FlowerPot extends Flowable{
 		return $items;
 	}
 
-	public function getPickedItem() : Item{
-		return $this->plant !== null ? $this->plant->asItem() : parent::getPickedItem();
+	public function getPickedItem(bool $addUserData = false) : Item{
+		return $this->plant !== null ? $this->plant->asItem() : parent::getPickedItem($addUserData);
 	}
 
 	public function isAffectedBySilkTouch() : bool{

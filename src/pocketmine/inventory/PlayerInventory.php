@@ -119,16 +119,10 @@ class PlayerInventory extends BaseInventory{
 	 * Sets the item in the currently-held slot to the specified item.
 	 *
 	 * @param Item $item
-	 *
-	 * @return bool
 	 */
-	public function setItemInHand(Item $item) : bool{
-		if($this->setItem($this->getHeldItemIndex(), $item)){
-			$this->sendHeldItem($this->holder->getViewers());
-			return true;
-		}
-
-		return false;
+	public function setItemInHand(Item $item) : void{
+		$this->setItem($this->getHeldItemIndex(), $item);
+		$this->sendHeldItem($this->holder->getViewers());
 	}
 
 	/**
@@ -139,11 +133,7 @@ class PlayerInventory extends BaseInventory{
 	public function sendHeldItem($target) : void{
 		$item = $this->getItemInHand();
 
-		$pk = new MobEquipmentPacket();
-		$pk->entityRuntimeId = $this->getHolder()->getId();
-		$pk->item = $item;
-		$pk->inventorySlot = $pk->hotbarSlot = $this->getHeldItemIndex();
-		$pk->windowId = ContainerIds::INVENTORY;
+		$pk = MobEquipmentPacket::create($this->getHolder()->getId(), $item, $this->getHeldItemIndex(), ContainerIds::INVENTORY);
 
 		if(!is_array($target)){
 			$target->sendDataPacket($pk);
@@ -172,16 +162,15 @@ class PlayerInventory extends BaseInventory{
 		if(!($holder instanceof Player)){
 			throw new \LogicException("Cannot send creative inventory contents to non-player inventory holder");
 		}
-		$pk = new InventoryContentPacket();
-		$pk->windowId = ContainerIds::CREATIVE;
 
+		$items = [];
 		if(!$holder->isSpectator()){ //fill it for all gamemodes except spectator
 			foreach(Item::getCreativeItems() as $i => $item){
-				$pk->items[$i] = clone $item;
+				$items[$i] = clone $item;
 			}
 		}
 
-		$holder->sendDataPacket($pk);
+		$holder->sendDataPacket(InventoryContentPacket::create(ContainerIds::CREATIVE, $items));
 	}
 
 	/**
