@@ -46,7 +46,7 @@ class EnderChestInventory extends ChestInventory{
 	}
 
 	public function getDefaultSize() : int{
-		return 27;
+		return 9;
 	}
 
 	/**
